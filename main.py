@@ -1,13 +1,14 @@
-import machine
 import network
+import machine
 import time
 import dht
 import urequests
 import json
 
-
 sensor = dht.DHT22(machine.Pin(22))
 switch = machine.Pin(14, machine.Pin.IN, machine.Pin.PULL_DOWN)
+red_led = machine.Pin(16, machine.Pin.OUT)  # Punainen LED
+red_led.value(False)
 
 # Wi-Fi
 SSID = 'xx'
@@ -54,7 +55,27 @@ def get_temp():
         sensor.measure()
         temp = sensor.temperature()
         print("Temperature:", temp)
-        return temp    
+        return temp
+
+
+def get_limit():
+    try:
+        url = 'https://temperatures.azurewebsites.net/get_limit'  # Limit endpoint
+        response = urequests.get(url)
+        print("Server response:", response.text)  # Debug-tuloste
+        data = json.loads(response.text)  # Varmista, että tämä palauttaa odotettua JSON:ia
+        response.close()
+        limit = data.get('limit', None)
+        if limit is not None:
+            print("Current limit:", limit)
+            return float(limit)
+        else:
+            print("Limit not found in response.")
+            return None
+    except Exception as e:
+        print("Error fetching limit:", e)
+        return None
+
 
 def get_timestamp():
     current_time = time.gmtime()
@@ -62,23 +83,32 @@ def get_timestamp():
         current_time[0], current_time[1], current_time[2], current_time[3], current_time[4], current_time[5]
     )
     return timestamp
+
 switch.irq(trigger=machine.Pin.IRQ_RISING, handler=button_handler)
 
 # Pääsilmukka
 while True:
-    try:
         temp = get_temp()
-        db_timestamp = get_timestamp()
+        limit = get_limit()
+        timestamp = get_timestamp
+        if limit is not None and temp >= limit:
+            red_led.value(True)  # Sytytä LED
+        else:
+            red_led.value(False)  # Sammuta LED
+
+        # Lähetä lämpötila palvelimelle
+        
         url = 'https://temperatures.azurewebsites.net/post_temp'
         headers = {'Content-Type': 'application/json'}
         data = {
             "temp": temp,
-            "timestamp": db_timestamp
+            "timestamp": get_timestamp()  # Käytä määriteltyä timestampia
         }
-
-        response = urequests.post(url, headers=headers, data=json.dumps(data))
-        response.close()
-        time.sleep(5)
-    except Exception as e:
-        print("Error:", e)
-
+        print("Sending data:", data)  # Debug-tuloste
+        try:
+            response = urequests.post(url, headers=headers, data=json.dumps(data))
+            print("Response status:", response.status_code)
+            print("Response text:", response.text)  # Tulosta palvelimen vastaus
+            response.close()
+        except Exception as e:
+            print("Error sending data:", e)

@@ -62,9 +62,35 @@ app.post("/post_temp", (req, res) => {
         res.status(500).send("Server error");
         return;
       }
-      res.json({ id: result.insertId, temp, timestamp });
+      res.json({
+        id: result.insertId,
+        temp,
+        timestamp,
+        limit: global.limitValue,
+      });
     }
   );
+});
+
+// Raja-arvon haku
+app.get("/get_limit", (req, res) => {
+  if (global.limitValue === null) {
+    return res.json({ limit: null }); // Palauttaa null JSON-muodossa
+  }
+  res.json({ limit: global.limitValue }); // Palauttaa asetetun raja-arvon
+});
+
+global.limitValue = null;
+app.post("/post_limit", (req, res) => {
+  const { limit_value: newLimitValue } = req.body;
+
+  if (typeof newLimitValue !== "number") {
+    return res.status(400).send({ error: "Invalid limit value" });
+  }
+  global.limitValue = newLimitValue;
+  console.log("Updated limit value:", newLimitValue);
+
+  res.send({ status: "Limit value received", newLimitValue });
 });
 
 app.listen(port, () => {
